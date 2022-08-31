@@ -1,0 +1,266 @@
+---
+title: "Explore Citi Bike Data"
+output: html_notebook
+---
+
+### Citi Bike Data
+
+Welcome to the off platform project focused on visualization. In this project, we will be exploring data associated with the New York City bike share program, Citi Bike! Remember, it may be easiest to read these instructions by clicking on the "Preview" button in RStudio.
+
+There are over 850 Citi Bike stations in New York City &mdash; users check a bike out from a starting station and then dock that bike at a different station when they reach their destination. Citi Bike offers a variety of memberships, but most memberships allow for trips between 30 and 45 minutes &mdash; this will be relevant once we start digging into the dataset.
+
+Citi Bike publically releases a variety of datasets. We've included a dataset containing information about individual trips from January of 2020. If you'd like to download a more recent dataset, or investigate other data that Citi Bike provides, take a look at their [System Data](https://www.citibikenyc.com/system-data) page. There are so many interesting questions that you can investigate with this data &mdash; we're about to walk you through a few, but we'd love to see what else you can discover!
+
+### Investigate the Data
+
+We've included a file named `january_trips.csv`. Load this data into a dataframe using the `read.csv()` function. Note that this dataset is _big_. It may take a few minutes to load &mdash; if you'd like to use a subset of this data that will take less time to load, we've included a file named `january_trips_subset.csv` as well. We strongly recommend using this subset of the data. When loading these datasets, make sure that the .csv files are in the same directory as this .Rmd file.
+
+Note that because this dataset is so large, it may take several seconds to load the data or preview your R Notebook.
+
+```{r}
+# Load the data set into a data frame
+
+all_data <- read.csv("january_trips_subset.csv")
+```
+
+Now that we've loaded the dataset, the easiest way to investigate the data is to click on the variable name in the "Global Environment" tab in RStudio. This will let you scroll through the data as if it were a spreadsheet. If you want to display some of the data in this document, call the `head()` function using your data frame as a parameter. Make sure to scroll through all of the columns!
+
+```{r}
+# Investigate the data
+
+head(all_data)
+```
+
+
+
+Since we have information about the starting and ending location for each trip, let's quickly make a heat map of the starting locations. Make a heat map using `ggplot()` and `geom_bin2d()`. If you make the bin width for each axis very small (we used `0.001`), you should see the shape of Manhattan, Brooklyn, and Queens! Check out the rectangle in Manhattan with no stations &mdash; that's Central Park!
+
+Make sure to install and load `ggplot2` and `dplyr`!
+
+```{r}
+# Install and load ggplot2 and dplyr
+library(ggplot2)
+library(dplyr)
+# Create a heatmap
+heatmap <- ggplot(data = all_data, aes(start.station.latitude, start.station.longitude)) + geom_bin2d(binwidth = 0.001)
+heatmap
+```
+
+
+We also have the duration of each trip. Using these features, we can calculate the average speed of each trip.
+
+Finally, since we also have the date of birth for each rider, we can calculate their age.
+
+Let's work towards building a line graph where age is on the x axis and average speed is on the y axis. This graph could help Citi Bike understand how their users are using their bikes. For example, if younger riders tend to bike much faster than older riders, Citi Bike may want to think about ways to encourage younger riders to bike more cautiously.
+
+Before we begin to work on the visualization, we'll have to work a bit with our dataset to get all of the relevant columns.
+
+### Modifying the Data Frame: Subset and Age
+
+Since this dataset is so big, we recommend using the `filter()` function to grab a subset of the data. For example, you could grab only the rows where the duration was under 900 seconds (15 minutes). We stored these rows in a new data frame named `short_trips`. Note that we did this only to speed up the runtime of upcoming operations. This is completely optional &mdash; if you're happy to wait a bit for each operation, feel free to use the complete data set.
+
+```{r}
+# Create a subset of the data
+short_trips <- all_data %>% filter(tripduration<900)
+
+```
+
+Next, let's add a column called `age` to the data frame. `age` should be 2020 minus `birth.year` (this data was collected in 2020). Use the `mutate()` function to do this. After calling mutate, make sure to save the result in a variable. We should save the result back to `short_trips`.
+
+```{r}
+# Add the age column
+all_data <- all_data %>% mutate('age' = 2020 - birth.year)
+all_data
+```
+
+### Modifying the Data Frame: Distance
+
+In order to calculate the speed of each biker, we need to find the total distance they traveled. Luckily, we have information about the starting and ending latitudes and longitudes. Let's use those four columns to create a new column named `distance`. 
+
+There are many different ways to calculate distance. We'll walk you through the strategy we used. However, before following along with us, challenge yourself to solve this problem on your own &mdash; one of the goals of these off platform projects is to get comfortable problem solving on your own. Try to use Google to find the packages you might need to calculate the distance between latitude and longitude coordinates. Use the code block below to try solving this problem on your own. We'll walk you through our solution in the following section.
+
+As you write your code that edits the data frame, consider printing the head of the data frame to validate the work you are doing!
+
+```{r}
+# Try creating a distance column in your data frame here:
+all_data <- all_data %>% mutate("distance.lat" = start.station.latitude - end.station.latitude) %>% mutate("distance.long" = start.station.longitude - end.station.longitude)
+all_data <- all_data %>% mutate("dist.lat.sq" = distance.lat*distance.lat, "dist.long.sq" = distance.long**2)
+all_data <- all_data %>% mutate("my.distance" = (dist.lat.sq + dist.long.sq)**0.5)
+head(all_data)
+```
+
+There are many different strategies to calculate the distance between two points. The simplest way to do this would be to find the length of the straight line between the two points. This is a massive assumption to make &mdash; it would be remarkable if any of these bike trips traveled in a straight line between the two points without making any turns or curves.
+
+That being said, finding the straight line distance is a good starting point. The `distHaversine()` function found in the `geosphere` library can calculate this distance.
+
+First, install and load the `geosphere` library.
+
+Next, use `dplyr`'s `select()` function to create two new data frames that contain only the latitudes and longitudes of the starting and ending points. We called these data frames `starting_stations` and `ending_stations`.
+
+Finally, use `dplyr`'s `mutate()` function to add a column named `distance` to your data. `distance` should be calculated by calling `distHaversine()` using `starting_stations` and `ending_stations` as parameters.
+
+If you get stuck, use `?distHaversine` to check the documentation to see more examples! You can also use the documentation to find the units of the result of `distHaversine()`!
+
+```{r}
+# Use the geosphere library to create a distance column
+library(geosphere)
+starting_stations <- all_data %>% select(start.station.latitude, start.station.longitude)
+ending_stations <- all_data %>% select(end.station.latitude, end.station.longitude)
+
+#head(starting_stations)
+#head(ending_stations)
+
+all_data <- all_data %>% mutate("distance" = distHaversine(starting_stations, ending_stations))
+head(all_data)
+
+
+```
+
+### Modifying the Data Frame: Speed
+
+Now that we've made a column containing the distance of each trip, let's make another column containing the average speed of each trip. This column should be easier to create than the previous &mdash; speed can be calculated by dividing the `distance` column by the `tripduration` column. This will give us the average speed in meters per second. Use the `mutate()` function to make the `speed` column!
+
+```{r}
+# Create the speed column
+all_data <- all_data %>% mutate("speed" = distance/tripduration)
+head(all_data)
+
+```
+
+### Modifying the Data Frame: Average Speed by Age
+
+We're almost there! Now that we have the speed of every bike trip, we want to group those trips by `age` and find the average speed of each age. 
+
+Do this by piping your data frame into the `group_by()` function using `age` as a parameter. 
+
+Then pipe the result of that function into the `summarize()` function. `summarize()` works similarly to `mutate()` &mdash; pass `mean_speed = mean(speed)` to the `summarize()` function to create a new column named `mean_speed`. Save this new data frame in a variable called `average_speed_by_age`.
+
+
+```{r}
+# Use group_by() and summarize() to get the mean speed of each age
+avg_speed_by_age <- all_data %>% group_by(age) %>% summarize(mean_speed = mean(speed))
+avg_speed_by_age
+```
+
+### Visualization!
+
+We made it! We now have the average speed of every age in our dataset. Let's use `ggplot2` to make a line graph to see if younger people really do bike faster. Make sure to install and load `ggplot2` if you haven't done so already. Pass your data frame to `ggplot()` and add a `geom_line()`. `geom_line()` should contain an aesthetic where `x = age` and `y = mean_speed`.
+
+```{r}
+# Install and load ggplot2 to create a line graph of age and mean speed
+viz <- ggplot(data = avg_speed_by_age) +geom_line(aes(x = age, y = mean_speed))
+viz
+```
+
+Nice work! Our intuition seems to be right &mdash; there's a steady drop in speed until we hit some outliers. It would be pretty surprising to see someone over the age of 100 using a bike share program! Let's filter the data to only show ages less than 80 and redraw our visualization.
+
+```{r}
+# Filter the data frame to only contain rows where the age is less than 80
+avg_speed_by_age_filtered <- avg_speed_by_age %>% filter(age>16, age<80)
+filtered_viz <- ggplot(data = avg_speed_by_age_filtered) +geom_line(aes(x = age, y = mean_speed))
+filtered_viz
+```
+
+That looks a bit better! Let's do some work to make our graph look a bit more professional. Add a title and axis labels. We also centered our title!
+
+```{r}
+# Add a title and label the axes
+professional_viz <- filtered_viz + labs(title = "Mean Speed by Age", subtitle = "Data from Citibike NY") +theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5))
+professional_viz
+```
+
+### Filtering By Gender
+
+Great work! This visualization gives us some great insights on how Citi Bike users are using their bikes. Let's dive even deeper! We can group our data by more than one feature. 
+
+Find your line of code that grouped our data by `age`. Copy it, but add `gender` as a parameter to the `group_by()` function. Save the result in a data frame named `average_speed_by_age_and_gender`. Inspect this data frame to see what it contains.
+
+
+```{r}
+# Use group_by() again to group by both age and gender
+average_speed_by_age_and_gender <- all_data %>% group_by(age, gender) %>% summarize(mean_speed = mean(speed)) %>% filter(age>16, age<80)
+#(average_speed_by_age_and_gender)
+```
+
+Let's now visualize the difference in average speed by age _and_ gender. Note that if you look in the documentation for the data, a `0` represents a user that didn't specify their gender as male or female, a `1` represents a user identifying as male, and a `2` represents a user identifying as female.
+
+The previous call to `ggplot()` and `geom_line()` should be close to what we want. Add the parameter `color = gender` to the aesthetic in `geom_line()`. Make sure you use the new data containing the gender information! You once again may want to filter out the ages greater than 80.
+
+Note that this graph won't quite be what we want yet, but we're getting close!
+
+```{r}
+# Make a line graph of your new filtered data frame
+age_gender_viz <- ggplot(data = average_speed_by_age_and_gender) +geom_line(aes(x = age, y = mean_speed, color = gender))
+age_gender_viz
+```
+
+It's a bit hard to tell what is happening in that graph &mdash; but one oddity that sticks out is the scale used for gender. We know that our gender data is represented as three distinct values &mdash; `0`, `1`, and `2`. However, `ggplot()` is using gender as a continuous variable. 
+
+We can turn this column into a factor by using the `as.factor()` and `mutate()` functions. Pipe your data frame into the `mutate()` function and use  `gender = as.factor(gender)` as the parameter.
+
+Note that when you make this column a factor, you will see a number of warnings. This warning is telling you that the type of the values in the gender column have been changed from integers to characters.
+
+Then redraw your graph.
+
+```{r warning=FALSE}
+# Use mutate() and as.factor() to change the gender column into a factor.
+average_speed_by_age_and_gender <- average_speed_by_age_and_gender %>% mutate(gender = as.factor(gender))
+age_gender_viz <- ggplot(data = average_speed_by_age_and_gender) +geom_line(aes(x = age, y = mean_speed, color = gender))
+age_gender_viz
+```
+
+Nice work! We can now see the average speeds by age broken into the 3 genders Citi Bike accounts for. You can see that male-identifying users typically bike faster than female-identifying users. Users with an unknown gender don't follow a specific pattern &mdash; it is likely that there isn't enough data to properly visualize those users.
+
+For our final version of this graph, we filtered out the users with a gender of `0`, and we labeled the lines as "Male Identifying" and "Female Identifying" using the `scale_color_discrete()` function. Take a look at the documentation for this function using `?scale_color_discrete` to change the label of each line.
+
+```{r}
+# Filter the data frame to only include genders 1 and 2. Set appropriate labels for the legend
+average_speed_by_age_and_gender <- average_speed_by_age_and_gender %>% mutate(gender = as.factor(gender)) %>% filter(gender != 0)
+#?scale_color_discrete
+age_gender_viz + scale_color_discrete(name = "Gender", labels = c("Male Identifying", "Female Identifying"))
+
+```
+
+### Making a Stacked Bar Plot Of Ages
+
+Let's make one final graph. For this graph, we're interested in seeing the distribution of Citi Bike users' age and gender. Let's use a stacked bar plot to do this. We'll want to create a bar plot where age is on the x axis, count is on the y axis, and each bar is split into genders.
+
+Let's start by using our `short_trips` dataset. We'll want to call `group_by()` using this dataset and pipe the result to `tally()`. This will let us get a count of the number of bikers for each age and gender. We saved this new data frame in a variable called `age_counts`.
+
+```{r}
+# Create the age_counts data frame
+age_counts <- all_data %>% group_by(age, gender) %>% tally()
+age_counts
+```
+
+If you look at the head of this new data frame, you'll see the counts are stored in a column named `n`. Let's now use `ggplot()` and `geom_col()` to create a stacked bar plot. `ggplot()` should have an `aes()` where `x = age`, `y = n` and `fill = gender`.
+
+```{r}
+# Create the stacked bar plot
+stacked_bar <- ggplot(data = age_counts, aes(x = age, y = n, fill = as.factor(gender))) + geom_col()
+stacked_bar
+```
+
+Great! There are some tweaks that we might want to make to this graph. First, gender right now is represented as an integer. It will make more sense if that column is represented as a factor. To do this, we can pass `as.factor(gender)` as the value for the x axis.
+
+Next, it looks like we have some unusual data around the age of 50. It looks like there are a ton of bikers with an unknown gender at that age. This might be something we want to dig into a bit more, but for now, let's filter out the bikers with a gender of `0`. We also filtered out bikers with an age over `100` &mdash; that seems like an error in data collection as well.
+
+Finally, we labeled and titled our graph using `labs()` and `scale_fill_discrete()`
+
+```{r}
+# Filter and label your graph
+age_counts <- age_counts %>% filter(gender != 0) %>% filter(age<80)
+#age_counts
+
+stacked_bar <- ggplot(data = age_counts, aes(x = age, y = n, fill = as.factor(gender))) + geom_col() +labs(title = "Bikers by age and gender") + theme(plot.title = element_text(hjust = 0.5)) + scale_fill_discrete(name="Gender", labels = c("Male Identifying","Female Identifying"))
+
+stacked_bar
+```
+
+### Further Work
+
+Great work! You've made several graphs that show a real difference in the way different groups of Citi Bike users bike. This could be a valuable asset in helping Citi Bike understand how to make bike riding safer in New York. However, there is so much more you can do with this data!
+
+To begin, there are some major flaws in the way we calculated the speed. Specifically, we made some _huge_ assumptions when calculating the distance of each bike ride. Instead of calculating the straight line distance using the geosphere library, we could take advantage of a service like Google Map's API to get a more accurate measurement of distance. If you're interested in look more into this problem, investigate getting a [Google Maps API key](https://developers.google.com/maps/documentation/geocoding/get-api-key) and using a library like [gmapsdistance](https://cran.r-project.org/web/packages/gmapsdistance/gmapsdistance.pdf).
+
+Another great way to extend this project is to investigate other data that Citi Bike makes available. We used data found in the _Citi Bike Trip Histories_ section on the [System Data](https://www.citibikenyc.com/system-data) page. On the System Data page, you can find different dataset, including information about membership data and real time station data. You could use this real time data to track how the flow of bikes changes over the course of the day. You could investigate how the weather impacts membership. We would love to see any graphs or insights you produce!
